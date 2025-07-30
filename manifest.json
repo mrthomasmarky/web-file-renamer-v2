@@ -1,0 +1,17 @@
+{
+    "name": "Advanced File Renamer",
+    "short_name": "File Renamer",
+    "description": "A tool to rename multiple files with advanced options",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#f3f4f6",
+    "theme_color": "#3b82f6",
+    "icons": [
+      {
+        "src": "/apple-touch-icon.png",
+        "sizes": "180x180",
+        "type": "image/png"
+      }
+    ],
+    "scope": "/"
+  }

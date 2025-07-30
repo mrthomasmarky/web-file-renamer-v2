@@ -1,0 +1,633 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="File Renamer">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+  <title>Advanced File Renamer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-4 text-center">Advanced File Renamer</h1>
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Upload Files</label>
+      <input type="file" id="fileInput" multiple class="mt-1 block w-full p-2 border border-gray-300 rounded-md" />
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Renaming Options</label>
+      <div class="mt-2 space-y-6">
+        <!-- Sorting -->
+        <div>
+          <h2 class="text-lg font-semibold">Sorting</h2>
+          <div class="mt-2 space-y-2">
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="natural" class="form-checkbox"><span class="ml-2">Natural Sorting</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="name" class="form-checkbox"><span class="ml-2">File Name Order</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="name_reverse" class="form-checkbox"><span class="ml-2">Reverse File Name Order</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="mod_time" class="form-checkbox"><span class="ml-2">Modification Time Order</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="mod_time_reverse" class="form-checkbox"><span class="ml-2">Reverse Modification Time Order</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="random" class="form-checkbox"><span class="ml-2">Random Order</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="sortMethod" value="reverse" class="form-checkbox"><span class="ml-2">Reverse Sorting</span></label>
+          </div>
+        </div>
+        <!-- File Extension -->
+        <div>
+          <h2 class="text-lg font-semibold">File Extension</h2>
+          <div class="mt-2 space-y-2">
+            <label class="inline-flex items-center"><input type="checkbox" id="extUppercase" name="extMode" class="form-checkbox"><span class="ml-2">Convert to Uppercase</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="extLowercase" name="extMode" class="form-checkbox"><span class="ml-2">Convert to Lowercase</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="extCustom" name="extMode" class="form-checkbox"><span class="ml-2">Change to:</span></label>
+            <input type="text" id="customExtension" placeholder="New extension (e.g., txt)" class="ml-4 w-1/2 p-2 border border-gray-300 rounded-md" disabled />
+          </div>
+        </div>
+        <!-- Case -->
+        <div>
+          <h2 class="text-lg font-semibold">Case</h2>
+          <div class="mt-2 space-y-2">
+            <label class="inline-flex items-center"><input type="checkbox" name="caseMode" value="uppercase" class="form-checkbox"><span class="ml-2">Uppercase</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="caseMode" value="lowercase" class="form-checkbox"><span class="ml-2">Lowercase</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="caseMode" value="title" class="form-checkbox"><span class="ml-2">Title Case</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="caseMode" value="sentence" class="form-checkbox"><span class="ml-2">Sentence Case</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="ignoreExtensionCase" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+          </div>
+        </div>
+        <!-- Order -->
+        <div>
+          <h2 class="text-lg font-semibold">Order</h2>
+          <div class="mt-2 space-y-2">
+            <div class="flex space-x-2">
+              <input type="text" id="orderTemplate" placeholder="#" value="#" class="w-1/2 p-2 border border-gray-300 rounded-md" />
+              <select id="orderTemplateSelect" class="w-1/2 p-2 border border-gray-300 rounded-md">
+                <option value="#">#</option>
+                <option value="{self}_#">{self}_#</option>
+                <option value="#_{self}">#_{self}</option>
+                <option value="file-#">file-#</option>
+                <option value="img-#">img-#</option>
+              </select>
+            </div>
+            <div class="flex space-x-2">
+              <div class="w-1/3">
+                <label class="block text-sm">Starting Number</label>
+                <input type="number" id="orderStart" min="1" value="1" class="w-full p-2 border border-gray-300 rounded-md" />
+              </div>
+              <div class="w-1/3">
+                <label class="block text-sm">Number Increment</label>
+                <input type="number" id="orderIncrement" min="1" value="1" class="w-full p-2 border border-gray-300 rounded-md" />
+              </div>
+              <div class="w-1/3">
+                <label class="block text-sm">Number of Digits</label>
+                <input type="number" id="orderDigits" min="1" value="2" class="w-full p-2 border border-gray-300 rounded-md" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Replace -->
+        <div>
+          <h2 class="text-lg font-semibold">Replace</h2>
+          <div id="replaceRules" class="mt-2 space-y-2">
+            <div class="flex space-x-2">
+              <input type="text" class="replace-search w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Search pattern" />
+              <input type="text" class="replace-replace w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Replace with" />
+            </div>
+          </div>
+          <div class="mt-2 space-y-2">
+            <label class="inline-flex items-center"><input type="checkbox" name="replaceScope" value="all" class="form-checkbox"><span class="ml-2">All</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="replaceScope" value="first" class="form-checkbox"><span class="ml-2">First</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="replaceScope" value="last" class="form-checkbox"><span class="ml-2">Last One</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="replaceScope" value="range" class="form-checkbox"><span class="ml-2">Specify Range</span></label>
+            <div class="flex space-x-2">
+              <input type="number" id="replaceStart" placeholder="Start (1-based)" class="w-1/2 p-2 border border-gray-300 rounded-md" disabled />
+              <input type="number" id="replaceEnd" placeholder="End" class="w-1/2 p-2 border border-gray-300 rounded-md" disabled />
+            </div>
+            <label class="inline-flex items-center"><input type="checkbox" id="replaceIgnoreExt" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="replaceIgnoreCase" class="form-checkbox"><span class="ml-2">Ignore Case</span></label>
+          </div>
+          <button id="addReplaceRule" class="mt-2 text-blue-500 hover:underline">Add Another Rule</button>
+        </div>
+        <!-- Insert -->
+        <div>
+          <h2 class="text-lg font-semibold">Insert</h2>
+          <div class="mt-2 space-y-2">
+            <input type="text" id="insertText" placeholder="Text to insert" class="w-full p-2 border border-gray-300 rounded-md" />
+            <label class="inline-flex items-center"><input type="checkbox" name="insertMode" value="before" class="form-checkbox"><span class="ml-2">Before Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="insertMode" value="after" class="form-checkbox"><span class="ml-2">After Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="insertMode" value="position" class="form-checkbox"><span class="ml-2">After Specified Position</span></label>
+            <input type="number" id="insertPosition" placeholder="Position (1-based)" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <label class="inline-flex items-center"><input type="checkbox" name="insertMode" value="text" class="form-checkbox"><span class="ml-2">After Specified Text</span></label>
+            <input type="text" id="insertTextMatch" placeholder="Text to match" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <label class="inline-flex items-center"><input type="checkbox" id="insertIgnoreExt" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+          </div>
+        </div>
+        <!-- Cut -->
+        <div>
+          <h2 class="text-lg font-semibold">Cut</h2>
+          <div class="mt-2 space-y-2">
+            <label class="inline-flex items-center"><input type="checkbox" name="cutMode" value="position" class="form-checkbox"><span class="ml-2">After Specified Position</span></label>
+            <input type="number" id="cutStart" placeholder="Trim from the Nth Character" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <label class="inline-flex items-center"><input type="checkbox" name="cutMode" value="text" class="form-checkbox"><span class="ml-2">After Specified Text</span></label>
+            <input type="text" id="cutText" placeholder="Text to match" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <input type="number" id="cutLength" placeholder="Default Trim to End" class="w-full p-2 border border-gray-300 rounded-md" />
+            <label class="inline-flex items-center"><input type="checkbox" id="cutIgnoreExt" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+          </div>
+        </div>
+        <!-- Random -->
+        <div>
+          <h2 class="text-lg font-semibold">Random</h2>
+          <div class="mt-2 space-y-2">
+            <p class="text-sm text-gray-500">Note: File names are case-insensitive in Windows. It is recommended to select lowercase only.</p>
+            <input type="text" id="randomLowercase" placeholder="Lowercase Letters" value="abcdefghijklmnopqrstuvwxyz" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="randomUppercase" placeholder="Uppercase Letters" value="ABCDEFGHIJKLMNOPQRSTUVWXYZ" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="randomNumbers" placeholder="Numbers" value="0123456789" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="randomSymbols" placeholder="Special Symbols" value="!@#$%^&*_+-" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="randomCustom" placeholder="Custom" class="w-full p-2 border border-gray-300 rounded-md" />
+            <div class="flex space-x-2">
+              <input type="number" id="randomLength" placeholder="Name Length" min="1" value="8" class="w-1/2 p-2 border border-gray-300 rounded-md" />
+              <label class="inline-flex items-center w-1/2"><input type="checkbox" name="randomMode" value="replace" class="form-checkbox"><span class="ml-2">Replace Filename</span></label>
+            </div>
+            <label class="inline-flex items-center"><input type="checkbox" name="randomMode" value="before" class="form-checkbox"><span class="ml-2">Before Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="randomMode" value="after" class="form-checkbox"><span class="ml-2">After Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="randomMode" value="position" class="form-checkbox"><span class="ml-2">After Specified Position</span></label>
+            <input type="number" id="randomPosition" placeholder="Position (1-based)" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <label class="inline-flex items-center"><input type="checkbox" name="randomMode" value="text" class="form-checkbox"><span class="ml-2">After Specified Text</span></label>
+            <input type="text" id="randomText" placeholder="Text to match" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+          </div>
+        </div>
+        <!-- Remove -->
+        <div>
+          <h2 class="text-lg font-semibold">Remove</h2>
+          <div class="mt-2 space-y-2">
+            <input type="text" id="removeLowercase" placeholder="Lowercase Letters" value="abcdefghijklmnopqrstuvwxyz" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="removeUppercase" placeholder="Uppercase Letters" value="ABCDEFGHIJKLMNOPQRSTUVWXYZ" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="removeNumbers" placeholder="Numbers" value="0123456789" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="removeChinese" placeholder="All Chinese Characters" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="removeSymbols" placeholder="Special Symbols" value="!@#$%&'+-_=#" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="removeCustom" placeholder="Custom" class="w-full p-2 border border-gray-300 rounded-md" />
+            <label class="inline-flex items-center"><input type="checkbox" id="removeAllExcept" class="form-checkbox"><span class="ml-2">Remove All Characters Except the Selected Ones</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="removeIgnoreExt" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+          </div>
+        </div>
+        <!-- List -->
+        <div>
+          <h2 class="text-lg font-semibold">List</h2>
+          <div class="mt-2 space-y-2">
+            <textarea id="listNames" placeholder="Please paste the list, one item per line, it should match the number of files" class="w-full p-2 border border-gray-300 rounded-md" rows="4"></textarea>
+            <label class="inline-flex items-center"><input type="checkbox" name="listMode" value="replace" class="form-checkbox"><span class="ml-2">Replace Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="listMode" value="before" class="form-checkbox"><span class="ml-2">Before Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="listMode" value="after" class="form-checkbox"><span class="ml-2">After Filename</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" name="listMode" value="position" class="form-checkbox"><span class="ml-2">After Specified Position</span></label>
+            <input type="number" id="listPosition" placeholder="Position (1-based)" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <label class="inline-flex items-center"><input type="checkbox" name="listMode" value="text" class="form-checkbox"><span class="ml-2">After Specified Text</span></label>
+            <input type="text" id="listText" placeholder="Text to match" class="w-full p-2 border border-gray-300 rounded-md" disabled />
+            <label class="inline-flex items-center"><input type="checkbox" id="listIgnoreExt" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+          </div>
+        </div>
+        <!-- Customize -->
+        <div>
+          <h2 class="text-lg font-semibold">Customize</h2>
+          <div class="mt-2 space-y-2">
+            <textarea id="customTable" placeholder="Please paste your custom translation table, one item per line" class="w-full p-2 border border-gray-300 rounded-md" rows="4"></textarea>
+            <input type="text" id="customSeparator" placeholder="Default is Tab character" value="\t" class="w-full p-2 border border-gray-300 rounded-md" />
+          </div>
+        </div>
+        <!-- Regular Expressions -->
+        <div>
+          <h2 class="text-lg font-semibold">Regular Expressions</h2>
+          <div class="mt-2 space-y-2">
+            <input type="text" id="regexPattern" placeholder="txt\d{1}" class="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" id="regexReplace" placeholder="file-$1" class="w-full p-2 border border-gray-300 rounded-md" />
+            <label class="inline-flex items-center"><input type="checkbox" id="regexIgnoreExt" class="form-checkbox" checked><span class="ml-2">Ignore File Extensions</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="regexIgnoreCase" class="form-checkbox"><span class="ml-2">Ignore Case</span></label>
+            <label class="inline-flex items-center"><input type="checkbox" id="regexGlobal" class="form-checkbox" checked><span class="ml-2">Global Match</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button id="renameBtn" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">Rename & Download</button>
+    <div id="fileList" class="mt-4"></div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const renameBtn = document.getElementById('renameBtn');
+    const fileListDiv = document.getElementById('fileList');
+    const addReplaceRule = document.getElementById('addReplaceRule');
+    let filesArray = [];
+
+    // Ensure only one checkbox per group is checked
+    function enforceSingleCheckbox(groupName) {
+      document.querySelectorAll(`input[name="${groupName}"]`).forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          if (e.target.checked) {
+            document.querySelectorAll(`input[name="${groupName}"]`).forEach(other => {
+              if (other !== e.target) other.checked = false;
+            });
+            triggerPreview(groupName.replace(/Mode$|Scope$/, ''));
+          }
+        });
+      });
+    }
+
+    // Enable/disable inputs based on checkbox states
+    document.getElementById('extCustom').addEventListener('change', (e) => {
+      document.getElementById('customExtension').disabled = !e.target.checked;
+      if (e.target.checked) triggerPreview('extension');
+    });
+    enforceSingleCheckbox('extMode');
+    enforceSingleCheckbox('sortMethod');
+    enforceSingleCheckbox('caseMode');
+    enforceSingleCheckbox('replaceScope');
+    enforceSingleCheckbox('insertMode');
+    enforceSingleCheckbox('cutMode');
+    enforceSingleCheckbox('randomMode');
+    enforceSingleCheckbox('listMode');
+
+    // Add event listeners for all inputs to trigger live preview
+    const inputsToWatch = [
+      'customExtension', 'orderTemplate', 'orderTemplateSelect', 'orderStart', 'orderIncrement', 'orderDigits',
+      'replaceStart', 'replaceEnd', 'replaceIgnoreExt', 'replaceIgnoreCase', 'insertText', 'insertPosition',
+      'insertTextMatch', 'insertIgnoreExt', 'cutStart', 'cutText', 'cutLength', 'cutIgnoreExt',
+      'randomLowercase', 'randomUppercase', 'randomNumbers', 'randomSymbols', 'randomCustom', 'randomLength',
+      'randomPosition', 'randomText', 'removeLowercase', 'removeUppercase', 'removeNumbers', 'removeChinese',
+      'removeSymbols', 'removeCustom', 'removeAllExcept', 'removeIgnoreExt', 'listNames', 'listPosition',
+      'listText', 'listIgnoreExt', 'customTable', 'customSeparator', 'regexPattern', 'regexReplace',
+      'regexIgnoreExt', 'regexIgnoreCase', 'regexGlobal'
+    ];
+    inputsToWatch.forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.addEventListener('input', () => {
+          const section = element.closest('div').querySelector('h2').textContent.toLowerCase().replace(' ', '');
+          triggerPreview(section);
+        });
+      }
+    });
+
+    // Add event listener for dynamically added replace rules
+    addReplaceRule.addEventListener('click', () => {
+      const ruleDiv = document.createElement('div');
+      ruleDiv.className = 'flex space-x-2';
+      ruleDiv.innerHTML = `
+        <input type="text" class="replace-search w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Search pattern" />
+        <input type="text" class="replace-replace w-1/2 p-2 border border-gray-300 rounded-md" placeholder="Replace with" />
+      `;
+      document.getElementById('replaceRules').appendChild(ruleDiv);
+      ruleDiv.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', () => triggerPreview('replace'));
+      });
+    });
+
+    // Update file list display
+    fileInput.addEventListener('change', () => {
+      filesArray = Array.from(fileInput.files).map(file => ({
+        file,
+        name: file.name,
+        lastModified: file.lastModified
+      }));
+      updateFileList();
+      triggerPreview('sorting'); // Default to sorting preview on file upload
+    });
+
+    function updateFileList() {
+      fileListDiv.innerHTML = '';
+      filesArray.forEach((item, index) => {
+        const p = document.createElement('p');
+        p.textContent = `Original: ${item.name} → New: ${item.newName || item.name}`;
+        fileListDiv.appendChild(p);
+      });
+    }
+
+    // Sorting function
+    function sortFiles(method) {
+      switch (method) {
+        case 'natural':
+          filesArray.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          break;
+        case 'name':
+          filesArray.sort((a, b) => a.name.localeCompare(b.name));
+          break;
+        case 'name_reverse':
+          filesArray.sort((a, b) => b.name.localeCompare(a.name));
+          break;
+        case 'mod_time':
+          filesArray.sort((a, b) => a.lastModified - b.lastModified);
+          break;
+        case 'mod_time_reverse':
+          filesArray.sort((a, b) => b.lastModified - a.lastModified);
+          break;
+        case 'random':
+          filesArray.sort(() => Math.random() - 0.5);
+          break;
+        case 'reverse':
+          filesArray.reverse();
+          break;
+      }
+    }
+
+    // Random string generator
+    function generateRandomString(length, chars) {
+      let result = '';
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    }
+
+    // Trigger preview for a specific mode
+    function triggerPreview(mode) {
+      if (filesArray.length === 0) return;
+      processFiles(true, mode);
+    }
+
+    // Preview and rename logic
+    async function processFiles(preview = false, mode) {
+      if (filesArray.length === 0) {
+        if (!preview) alert('Please upload at least one file.');
+        return;
+      }
+
+      const zip = preview ? null : new JSZip();
+
+      filesArray.forEach((item, index) => {
+        let newName = item.name;
+        const extension = item.name.split('.').pop();
+        const baseName = item.name.substring(0, item.name.lastIndexOf('.'));
+
+        if (mode === 'sorting') {
+          const selectedSort = Array.from(document.querySelectorAll('input[name="sortMethod"]:checked')).map(cb => cb.value);
+          if (selectedSort.length > 0) {
+            sortFiles(selectedSort[0]);
+            newName = item.name;
+          }
+        } else if (mode === 'extension') {
+          const uppercase = document.getElementById('extUppercase').checked;
+          const lowercase = document.getElementById('extLowercase').checked;
+          const custom = document.getElementById('extCustom').checked;
+          const customExt = document.getElementById('customExtension').value;
+          if (uppercase) newName = `${baseName}.${extension.toUpperCase()}`;
+          else if (lowercase) newName = `${baseName}.${extension.toLowerCase()}`;
+          else if (custom && customExt) newName = `${baseName}.${customExt}`;
+        } else if (mode === 'case') {
+          const selectedCase = Array.from(document.querySelectorAll('input[name="caseMode"]:checked')).map(cb => cb.value);
+          const ignoreExt = document.getElementById('ignoreExtensionCase').checked;
+          let newBase = baseName;
+          if (selectedCase.length > 0) {
+            const caseMode = selectedCase[0];
+            if (caseMode === 'uppercase') newBase = baseName.toUpperCase();
+            else if (caseMode === 'lowercase') newBase = baseName.toLowerCase();
+            else if (caseMode === 'title') newBase = baseName.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+            else if (caseMode === 'sentence') newBase = baseName.charAt(0).toUpperCase() + baseName.slice(1).toLowerCase();
+          }
+          newName = ignoreExt ? `${newBase}.${extension}` : `${newBase}.${extension.toLowerCase()}`;
+        } else if (mode === 'order') {
+          const template = document.getElementById('orderTemplate').value || '#';
+          const digits = parseInt(document.getElementById('orderDigits').value) || 2;
+          const start = parseInt(document.getElementById('orderStart').value) || 1;
+          const increment = parseInt(document.getElementById('orderIncrement').value) || 1;
+          const number = (start + index * increment).toString().padStart(digits, '0');
+          newName = template.replace('#', number).replace('{self}', baseName) + '.' + extension;
+        } else if (mode === 'replace') {
+          let tempName = baseName;
+          const scope = Array.from(document.querySelectorAll('input[name="replaceScope"]:checked')).map(cb => cb.value)[0] || 'all';
+          const ignoreExt = document.getElementById('replaceIgnoreExt').checked;
+          const ignoreCase = document.getElementById('replaceIgnoreCase').checked;
+          const start = parseInt(document.getElementById('replaceStart').value) || 1;
+          const end = parseInt(document.getElementById('replaceEnd').value) || tempName.length;
+          document.querySelectorAll('.replace-search').forEach((searchInput, i) => {
+            const search = searchInput.value;
+            const replace = document.querySelectorAll('.replace-replace')[i].value;
+            if (search) {
+              if (scope === 'all') {
+                tempName = ignoreCase ? tempName.replace(new RegExp(search, 'gi'), replace) : tempName.replace(new RegExp(search, 'g'), replace);
+              } else if (scope === 'first') {
+                tempName = ignoreCase ? tempName.replace(new RegExp(search, 'i'), replace) : tempName.replace(search, replace);
+              } else if (scope === 'last') {
+                const matches = tempName.match(new RegExp(search, ignoreCase ? 'gi' : 'g')) || [];
+                const lastIndex = tempName.lastIndexOf(matches[matches.length - 1] || '');
+                tempName = tempName.substring(0, lastIndex) + replace + tempName.substring(lastIndex + (matches[matches.length - 1] || '').length);
+              } else if (scope === 'range' && start <= end) {
+                const rangeText = tempName.substring(start - 1, end);
+                const replacedText = ignoreCase ? rangeText.replace(new RegExp(search, 'gi'), replace) : rangeText.replace(new RegExp(search, 'g'), replace);
+                tempName = tempName.substring(0, start - 1) + replacedText + tempName.substring(end);
+              }
+            }
+          });
+          newName = ignoreExt ? `${tempName}.${extension}` : `${tempName}.${extension}`;
+        } else if (mode === 'insert') {
+          const text = document.getElementById('insertText').value;
+          const mode = Array.from(document.querySelectorAll('input[name="insertMode"]:checked')).map(cb => cb.value)[0] || 'position';
+          const position = parseInt(document.getElementById('insertPosition').value) || 1;
+          const textMatch = document.getElementById('insertTextMatch').value;
+          const ignoreExt = document.getElementById('insertIgnoreExt').checked;
+          let target = ignoreExt ? baseName : item.name;
+          if (mode === 'before') {
+            newName = `${text}${target}`;
+          } else if (mode === 'after') {
+            newName = `${target}${text}`;
+          } else if (mode === 'position') {
+            const pos = position - 1;
+            newName = `${target.slice(0, pos)}${text}${target.slice(pos)}`;
+          } else if (mode === 'text' && textMatch) {
+            const index = target.indexOf(textMatch);
+            if (index !== -1) {
+              newName = `${target.slice(0, index + textMatch.length)}${text}${target.slice(index + textMatch.length)}`;
+            }
+          }
+          if (ignoreExt && mode !== 'before' && mode !== 'after') newName = `${newName}.${extension}`;
+        } else if (mode === 'cut') {
+          const mode = Array.from(document.querySelectorAll('input[name="cutMode"]:checked')).map(cb => cb.value)[0] || 'position';
+          const start = parseInt(document.getElementById('cutStart').value) || 1;
+          const length = parseInt(document.getElementById('cutLength').value) || undefined;
+          const textMatch = document.getElementById('cutText').value;
+          const ignoreExt = document.getElementById('cutIgnoreExt').checked;
+          let target = ignoreExt ? baseName : item.name;
+          if (mode === 'position' && start > 0) {
+            const pos = start - 1;
+            newName = length >= 0 ? `${target.slice(pos, pos + length)}` : `${target.slice(pos, length)}`;
+          } else if (mode === 'text' && textMatch) {
+            const index = target.indexOf(textMatch);
+            if (index !== -1) {
+              newName = length >= 0 ? `${target.slice(index, index + length)}` : `${target.slice(index, length)}`;
+            }
+          }
+          newName = ignoreExt ? `${newName}.${extension}` : newName;
+        } else if (mode === 'random') {
+          const lowercase = document.getElementById('randomLowercase').value;
+          const uppercase = document.getElementById('randomUppercase').value;
+          const numbers = document.getElementById('randomNumbers').value;
+          const symbols = document.getElementById('randomSymbols').value;
+          const custom = document.getElementById('randomCustom').value;
+          const length = parseInt(document.getElementById('randomLength').value) || 8;
+          const mode = Array.from(document.querySelectorAll('input[name="randomMode"]:checked')).map(cb => cb.value)[0] || 'replace';
+          const position = parseInt(document.getElementById('randomPosition').value) || 1;
+          const textMatch = document.getElementById('randomText').value;
+          const chars = lowercase + uppercase + numbers + symbols + custom;
+          const randomStr = generateRandomString(length, chars);
+          let target = baseName;
+          if (mode === 'replace') {
+            newName = `${randomStr}.${extension}`;
+          } else if (mode === 'before') {
+            newName = `${randomStr}${target}.${extension}`;
+          } else if (mode === 'after') {
+            newName = `${target}${randomStr}.${extension}`;
+          } else if (mode === 'position') {
+            const pos = position - 1;
+            newName = `${target.slice(0, pos)}${randomStr}${target.slice(pos)}.${extension}`;
+          } else if (mode === 'text' && textMatch) {
+            const index = target.indexOf(textMatch);
+            if (index !== -1) {
+              newName = `${target.slice(0, index + textMatch.length)}${randomStr}${target.slice(index + textMatch.length)}.${extension}`;
+            }
+          }
+        } else if (mode === 'remove') {
+          const lowercase = document.getElementById('removeLowercase').value;
+          const uppercase = document.getElementById('removeUppercase').value;
+          const numbers = document.getElementById('removeNumbers').value;
+          const chinese = document.getElementById('removeChinese').value;
+          const symbols = document.getElementById('removeSymbols').value;
+          const custom = document.getElementById('removeCustom').value;
+          const removeAllExcept = document.getElementById('removeAllExcept').checked;
+          const ignoreExt = document.getElementById('removeIgnoreExt').checked;
+          let chars = lowercase + uppercase + numbers + symbols + custom;
+          if (chinese) chars += '\u4E00-\u9FFF';
+          let tempName = baseName;
+          if (removeAllExcept) {
+            tempName = Array.from(baseName).filter(c => chars.includes(c)).join('');
+          } else {
+            tempName = Array.from(baseName).filter(c => !chars.includes(c)).join('');
+          }
+          newName = ignoreExt ? `${tempName}.${extension}` : tempName;
+        } else if (mode === 'list') {
+          const names = document.getElementById('listNames').value.split('\n').filter(n => n.trim());
+          const mode = Array.from(document.querySelectorAll('input[name="listMode"]:checked')).map(cb => cb.value)[0] || 'replace';
+          const position = parseInt(document.getElementById('listPosition').value) || 1;
+          const textMatch = document.getElementById('listText').value;
+          const ignoreExt = document.getElementById('listIgnoreExt').checked;
+          let target = ignoreExt ? baseName : item.name;
+          if (index < names.length) {
+            let newBase = names[index];
+            if (mode === 'replace') {
+              newName = ignoreExt ? `${newBase}.${extension}` : newBase;
+            } else if (mode === 'before') {
+              newName = `${newBase}${target}`;
+            } else if (mode === 'after') {
+              newName = `${target}${newBase}`;
+            } else if (mode === 'position') {
+              const pos = position - 1;
+              newName = `${target.slice(0, pos)}${newBase}${target.slice(pos)}`;
+            } else if (mode === 'text' && textMatch) {
+              const index = target.indexOf(textMatch);
+              if (index !== -1) {
+                newName = `${target.slice(0, index + textMatch.length)}${newBase}${target.slice(index + textMatch.length)}`;
+              }
+            }
+            if (ignoreExt && mode !== 'before' && mode !== 'after') newName = `${newName}.${extension}`;
+          }
+        } else if (mode === 'customize') {
+          const table = document.getElementById('customTable').value.split('\n').filter(l => l.trim());
+          const separator = document.getElementById('customSeparator').value || '\t';
+          const lookup = {};
+          table.forEach(line => {
+            const [oldName, newName] = line.split(separator, 2);
+            if (oldName && newName) lookup[oldName.trim()] = newName.trim();
+          });
+          if (lookup[item.name]) {
+            newName = lookup[item.name].includes('.') ? lookup[item.name] : `${lookup[item.name]}.${extension}`;
+          }
+        } else if (mode === 'regex') {
+          const pattern = document.getElementById('regexPattern').value;
+          const replace = document.getElementById('regexReplace').value;
+          const ignoreExt = document.getElementById('regexIgnoreExt').checked;
+          const ignoreCase = document.getElementById('regexIgnoreCase').checked;
+          const global = document.getElementById('regexGlobal').checked;
+          try {
+            const regex = new RegExp(pattern, global ? (ignoreCase ? 'gi' : 'g') : (ignoreCase ? 'i' : ''));
+            const target = ignoreExt ? baseName : item.name;
+            newName = target.replace(regex, replace);
+            if (ignoreExt) newName = `${newName}.${extension}`;
+          } catch (e) {
+            alert('Invalid regular expression');
+            return;
+          }
+        }
+
+        item.newName = newName;
+        if (!preview) zip.file(newName, item.file);
+      });
+
+      if (preview) {
+        updateFileList();
+      } else {
+        const content = await zip.generateAsync({ type: 'blob' });
+        saveAs(content, 'renamed_files.zip');
+      }
+    }
+
+    // Rename and download
+    renameBtn.addEventListener('click', () => {
+      const checkedModes = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.getAttribute('name').replace(/Mode$|Scope$/, ''));
+      const mode = checkedModes.length > 0 ? checkedModes[0] : null;
+      if (mode) processFiles(false, mode);
+      else alert('Please select a renaming option.');
+    });
+
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('Service Worker Registered'))
+        .catch(error => console.error('Service Worker Error:', error));
+    }
+
+    // Prompt user to add to Home Screen
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+      setTimeout(() => {
+        alert('Add this app to your Home Screen for a better experience!');
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
